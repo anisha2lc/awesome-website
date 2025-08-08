@@ -141,7 +141,7 @@ const Users: React.FC = () => {
 
       return { previousUsers };
     },
-    onError: (err, id, context) => {
+    onError: (err, _id, context) => {
       console.error("Delete failed", err);
       if (context?.previousUsers) {
         queryClient.setQueryData(["users"], context.previousUsers);
