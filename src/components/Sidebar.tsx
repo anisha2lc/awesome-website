@@ -14,6 +14,8 @@ import useAuthStore from "../store/authStore";
 interface SidebarProps {
   mobileOpen: boolean;
   setMobileOpen: (open: boolean) => void;
+  isOpen?: boolean;
+  onClose?: () => void;
 }
 
 const Sidebar = ({ mobileOpen, setMobileOpen }: SidebarProps) => {

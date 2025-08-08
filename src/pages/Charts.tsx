@@ -31,10 +31,7 @@ const ProjectsBarChart = () => {
     }
   };
 
-  const handleUpdate = (e: {
-    preventDefault: () => void;
-    target: { updatedValue: { value: string } };
-  }) => {
+  const handleUpdate = (e: string | any) => {
     e.preventDefault();
     const newCount = parseInt(e.target.updatedValue.value);
     if (!isNaN(newCount) && selectedIndex !== null) {
