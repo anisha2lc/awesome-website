@@ -124,11 +124,11 @@ const LoginPage = () => {
         </div>
 
         <div className="flex gap-4">
-          <button className="flex items-center gap-3 border border-gray-300 px-2 md:px-4 py-2 rounded-lg w-full justify-center hover:bg-gray-50 transition shadow-sm">
+          <button className="flex items-center gap-3 border border-gray-300 px-2 md:px-4 py-2 rounded-lg w-full justify-center hover:bg-gray-50 transition shadow-sm cursor-pointer">
             <FcGoogle className="text-xl" />
             <span className="text-sm text-gray-700">Google</span>
           </button>
-          <button className="flex items-center gap-3 border border-gray-300 px-2 md:px-4 py-2 rounded-lg w-full justify-center hover:bg-gray-50 transition shadow-sm">
+          <button className="flex items-center gap-3 border border-gray-300 px-2 md:px-4 py-2 rounded-lg w-full justify-center hover:bg-gray-50 transition shadow-sm cursor-pointer">
             <FaFacebookF className="text-blue-600 text-xl" />
             <span className="text-sm text-gray-700">Facebook</span>
           </button>
