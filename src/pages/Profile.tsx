@@ -121,7 +121,7 @@ const ProfilePage = () => {
               }}
               className="w-full py-3 rounded-xl text-white font-semibold bg-red-500 hover:bg-red-600 hover:scale-105 transition-transform duration-200"
             >
-              Cancel
+              Logout
             </button>
           </div>
         </form>
