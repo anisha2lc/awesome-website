@@ -3,7 +3,7 @@ import useAuthStore from "../store/authStore";
 import { useNavigate } from "react-router-dom";
 
 const ProfilePage = () => {
-  const { user, logout } = useAuthStore();
+  const { user, logout, updateUser } = useAuthStore();
   const navigate = useNavigate();
 
   const [email, setEmail] = useState(user?.email || "");
@@ -23,6 +23,16 @@ const ProfilePage = () => {
   }
 
   const handleSave = () => {
+    const updatedUser = {
+      ...user,
+      email,
+      fullname,
+      address,
+      phone: phone ? parseInt(phone) : undefined,
+    };
+    
+    // Update the store
+    updateUser(updatedUser);
     alert("✅ Profile updated successfully!");
   };
 

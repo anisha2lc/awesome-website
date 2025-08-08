@@ -1,10 +1,55 @@
 import React, { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { fetchUsers } from "../api/users";
 import useAuthStore from "../store/authStore";
 import type { User } from "../types/user";
 
 const USERS_PER_PAGE = 5;
+const LOCAL_STORAGE_KEY = "user_updates";
+
+const getStoredUpdates = (): Record<number, Partial<User>> => {
+  try {
+    const stored = localStorage.getItem(LOCAL_STORAGE_KEY);
+    return stored ? JSON.parse(stored) : {};
+  } catch {
+    return {};
+  }
+};
+
+const storeUpdate = (userId: number, updates: Partial<User>) => {
+  const currentUpdates = getStoredUpdates();
+  currentUpdates[userId] = { ...currentUpdates[userId], ...updates };
+  localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(currentUpdates));
+};
+
+const removeStoredUpdate = (userId: number) => {
+  const currentUpdates = getStoredUpdates();
+  delete currentUpdates[userId];
+  localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(currentUpdates));
+};
+
+const updateUser = async (
+  userId: number,
+  updates: Partial<User>
+): Promise<User> => {
+  const response = await fetch(
+    `https://jsonplaceholder.typicode.com/users/${userId}`,
+    {
+      method: "PUT",
+      body: JSON.stringify(updates),
+      headers: {
+        "Content-type": "application/json; charset=UTF-8",
+      },
+    }
+  );
+  return response.json();
+};
+
+const deleteUser = async (id: number): Promise<void> => {
+  await fetch(`https://jsonplaceholder.typicode.com/users/${id}`, {
+    method: "DELETE",
+  });
+};
 
 const Users: React.FC = () => {
   const [currentPage, setCurrentPage] = useState(1);
@@ -17,6 +62,7 @@ const Users: React.FC = () => {
   });
 
   const { user } = useAuthStore();
+  const queryClient = useQueryClient();
 
   const {
     data: users = [],
@@ -25,10 +71,91 @@ const Users: React.FC = () => {
   } = useQuery<User[]>({
     queryKey: ["users"],
     queryFn: fetchUsers,
+    staleTime: 5 * 60 * 1000,
+    gcTime: 30 * 60 * 1000,
+  });
+
+  const updatedUsers = React.useMemo(() => {
+    const storedUpdates = getStoredUpdates();
+    return users.map((user) => {
+      const updates = storedUpdates[user.id];
+      if (updates) {
+        return {
+          ...user,
+          ...updates,
+        };
+      }
+      return user;
+    });
+  }, [users]);
+
+  const updateUserMutation = useMutation({
+    mutationFn: ({
+      userId,
+      updates,
+    }: {
+      userId: number;
+      updates: Partial<User>;
+    }) => updateUser(userId, updates),
+    onMutate: async ({ userId, updates }) => {
+      await queryClient.cancelQueries({ queryKey: ["users"] });
+
+      const previousUsers = queryClient.getQueryData<User[]>(["users"]);
+
+      queryClient.setQueryData<User[]>(["users"], (old) =>
+        old?.map((u) =>
+          u.id === userId
+            ? {
+                ...u,
+                ...updates,
+              }
+            : u
+        )
+      );
+
+      storeUpdate(userId, updates);
+
+      return { previousUsers };
+    },
+    onError: (err, { userId }, context) => {
+      if (context?.previousUsers) {
+        queryClient.setQueryData(["users"], context.previousUsers);
+      }
+      removeStoredUpdate(userId);
+      console.error("Update failed:", err);
+    },
+  });
+
+  const deleteUserMutation = useMutation({
+    mutationFn: (id: number) => deleteUser(id),
+    onMutate: async (id: number) => {
+      await queryClient.cancelQueries({ queryKey: ["users"] });
+
+      const previousUsers = queryClient.getQueryData<User[]>(["users"]);
+
+      queryClient.setQueryData<User[]>(["users"], (old) =>
+        old?.filter((user) => user.id !== id)
+      );
+
+      removeStoredUpdate(id);
+
+      return { previousUsers };
+    },
+    onError: (err, id, context) => {
+      console.error("Delete failed", err);
+      if (context?.previousUsers) {
+        queryClient.setQueryData(["users"], context.previousUsers);
+      }
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ["users"] });
+    },
   });
 
   const handleDelete = (id: number) => {
-    console.warn(`User with id ${id} would be deleted (mock).`);
+    if (window.confirm("Are you sure you want to delete this user?")) {
+      deleteUserMutation.mutate(id);
+    }
   };
 
   const handleEdit = (user: User) => {
@@ -42,15 +169,19 @@ const Users: React.FC = () => {
 
   const handleUpdate = () => {
     if (editingUser) {
-      editingUser.name = editForm.name;
-      editingUser.email = editForm.email;
-      editingUser.company.name = editForm.company;
+      updateUserMutation.mutate({
+        userId: editingUser.id,
+        updates: {
+          name: editForm.name,
+          email: editForm.email,
+        },
+      });
       setEditingUser(null);
     }
   };
 
-  const totalPages = Math.ceil(users.length / USERS_PER_PAGE);
-  const paginatedUsers = users.slice(
+  const totalPages = Math.ceil(updatedUsers.length / USERS_PER_PAGE);
+  const paginatedUsers = updatedUsers.slice(
     (currentPage - 1) * USERS_PER_PAGE,
     currentPage * USERS_PER_PAGE
   );
@@ -89,12 +220,14 @@ const Users: React.FC = () => {
                       <button
                         onClick={() => handleEdit(userData)}
                         className="font-bold text-2xl px-3 py-1.5 rounded-md transform transition-transform duration-300 hover:scale-125 cursor-pointer hover:bg-red-100"
+                        disabled={updateUserMutation.isPending}
                       >
                         ✏️
                       </button>
                       <button
                         onClick={() => handleDelete(userData.id)}
                         className="text-red-700 font-bold text-3xl px-3 py-1.5 rounded-md transform transition-transform duration-300 hover:scale-125 cursor-pointer hover:bg-red-200"
+                        disabled={deleteUserMutation.isPending}
                       >
                         🗑
                       </button>
@@ -147,6 +280,18 @@ const Users: React.FC = () => {
           Next ➡️
         </button>
       </div>
+
+      {updateUserMutation.isPending && (
+        <div className="fixed bottom-4 right-4 bg-blue-500 text-white px-4 py-2 rounded-lg shadow-lg">
+          Updating user...
+        </div>
+      )}
+
+      {deleteUserMutation.isPending && (
+        <div className="fixed bottom-4 left-4 bg-red-500 text-white px-4 py-2 rounded-lg shadow-lg">
+          Deleting user...
+        </div>
+      )}
 
       {selectedUser && (
         <div className="fixed inset-0 z-40 flex items-center justify-center backdrop-blur-md bg-white/30">
@@ -210,6 +355,7 @@ const Users: React.FC = () => {
                   onChange={(e) =>
                     setEditForm({ ...editForm, name: e.target.value })
                   }
+                  disabled={updateUserMutation.isPending}
                 />
               </div>
 
@@ -224,6 +370,7 @@ const Users: React.FC = () => {
                   onChange={(e) =>
                     setEditForm({ ...editForm, email: e.target.value })
                   }
+                  disabled={updateUserMutation.isPending}
                 />
               </div>
 
@@ -235,9 +382,7 @@ const Users: React.FC = () => {
                   type="text"
                   className="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#4E42D9] transition"
                   value={editForm.company}
-                  onChange={(e) =>
-                    setEditForm({ ...editForm, company: e.target.value })
-                  }
+                  readOnly
                 />
               </div>
             </div>
@@ -246,14 +391,16 @@ const Users: React.FC = () => {
               <button
                 onClick={() => setEditingUser(null)}
                 className="px-4 py-2 text-sm text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-md transition"
+                disabled={updateUserMutation.isPending}
               >
                 Cancel
               </button>
               <button
                 onClick={handleUpdate}
-                className="px-4 py-2 text-sm text-white bg-[#4E42D9] hover:bg-indigo-700 rounded-md transition"
+                className="px-4 py-2 text-sm text-white bg-[#4E42D9] hover:bg-indigo-700 rounded-md transition disabled:opacity-50"
+                disabled={updateUserMutation.isPending}
               >
-                Update
+                {updateUserMutation.isPending ? "Updating..." : "Update"}
               </button>
             </div>
           </div>

@@ -13,6 +13,7 @@ interface AuthStore {
   user: User | null;
   login: (email: string, password: string) => boolean;
   logout: () => void;
+  updateUser: (updatedUser: User) => void;
 }
 
 // This store simulates user authentication and role management
@@ -47,6 +48,7 @@ const useAuthStore = create<AuthStore>()(
         return false;
       },
       logout: () => set({ user: null }),
+      updateUser: (updatedUser) => set({ user: updatedUser }),
     }),
     {
       name: "auth-storage", 
